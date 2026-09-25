@@ -7,9 +7,13 @@ function validId(value: unknown): value is string {
 }
 
 export async function GET(request: Request) {
-  const studentId = new URL(request.url).searchParams.get("studentId");
-  if (!validId(studentId)) return Response.json({ error: "Missing student." }, { status: 400 });
-  return Response.json(await getProgress(studentId));
+  const url = new URL(request.url);
+  const studentId = url.searchParams.get("studentId");
+  const grade = Number(url.searchParams.get("grade"));
+  if (!validId(studentId) || !Number.isInteger(grade) || grade < 1 || grade > 12) {
+    return Response.json({ error: "Missing student." }, { status: 400 });
+  }
+  return Response.json(await getProgress(studentId, grade));
 }
 
 export async function DELETE(request: Request) {

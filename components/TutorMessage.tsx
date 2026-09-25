@@ -1,5 +1,6 @@
 import type { TutorReply } from "@/lib/blocks";
 import { FormulaView } from "@/components/FormulaView";
+import { MathLine, MathText } from "@/components/MathText";
 import { Sketch } from "@/components/Sketch";
 
 const badgeClass = {
@@ -28,7 +29,13 @@ export function TutorMessage({ reply }: { reply: TutorReply }) {
             </h3>
           );
         }
-        if (block.type === "text") return <p key={index}>{block.text}</p>;
+        if (block.type === "text") {
+          return (
+            <p key={index}>
+              <MathText text={block.text} />
+            </p>
+          );
+        }
         if (block.type === "formula") return <FormulaView key={index} formulaId={block.formulaId} />;
         if (block.type === "sketch") return <Sketch key={index} name={block.name} caption={block.caption} />;
         if (block.type === "list") {
@@ -66,8 +73,13 @@ export function TutorMessage({ reply }: { reply: TutorReply }) {
               <ol className="step-list">
                 {block.steps.map((step, stepIndex) => (
                   <li key={step.text}>
-                    <span>{stepIndex + 1}</span>
-                    <p style={{ margin: 0 }}>{step.text}</p>
+                    <span className="step-index">{stepIndex + 1}</span>
+                    <div>
+                      <p style={{ margin: 0 }}>
+                        <MathText text={step.text} />
+                      </p>
+                      {step.latex ? <MathLine tex={step.latex} /> : null}
+                    </div>
                   </li>
                 ))}
               </ol>
@@ -101,7 +113,9 @@ export function TutorMessage({ reply }: { reply: TutorReply }) {
           return (
             <div className={`callout ${block.tone}`} key={index}>
               <strong>{block.title}</strong>
-              <p style={{ margin: "6px 0 0" }}>{block.text}</p>
+              <p style={{ margin: "6px 0 0" }}>
+                <MathText text={block.text} />
+              </p>
             </div>
           );
         }

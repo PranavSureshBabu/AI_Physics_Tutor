@@ -2,6 +2,7 @@
 
 import katex from "katex";
 import { getFormula } from "@/content/formulas";
+import { texSymbol } from "@/lib/tex";
 
 export function FormulaView({ formulaId }: { formulaId: string }) {
   const formula = getFormula(formulaId);
@@ -17,7 +18,7 @@ export function FormulaView({ formulaId }: { formulaId: string }) {
       <ul className="symbol-list">
         {formula.variables.map((variable) => (
           <li key={variable.symbol}>
-            <b>{variable.symbol}</b>
+            <b dangerouslySetInnerHTML={{ __html: katex.renderToString(texSymbol(variable.symbol), { throwOnError: false, displayMode: false }) }} />
             <span>
               {variable.meaning}. Unit: {variable.unit}.
             </span>

@@ -13,15 +13,15 @@ export default function ProgressPage() {
 
   useEffect(() => {
     if (!ready) return;
-    void fetch(`/api/progress?studentId=${studentId}`)
+    void fetch(`/api/progress?studentId=${studentId}&grade=${grade}`)
       .then((response) => response.json())
       .then((data: ProgressRecord) => setRecord(data));
-  }, [ready, studentId]);
+  }, [ready, studentId, grade]);
 
   async function restartProgress() {
     if (!ready) return;
     const confirmed = window.confirm(
-      "Restart progress? This clears topics, doubts, numericals, practice, and quizzes saved on this browser.",
+      `Restart Class ${grade} progress? This clears only this class. Other classes stay as they are.`,
     );
     if (!confirmed) return;
     setRestarting(true);
@@ -46,6 +46,9 @@ export default function ProgressPage() {
   return (
     <main>
       <PageGuide href="/progress" />
+      <p className="muted" style={{ marginTop: 0 }}>
+        This record is for Class {grade} only.
+      </p>
       <section className="action-grid">
         <article className="stat panel">
           <b>{record?.topics.length ?? 0}</b>

@@ -30,6 +30,10 @@ async function writeStore(store: Store) {
   await writeFile(filePath, JSON.stringify(store, null, 2));
 }
 
+function key(studentId: string, grade: number) {
+  return `${studentId}:${grade}`;
+}
+
 function blank(studentId: string, grade: number): ProgressRecord {
   return {
     studentId,
@@ -54,19 +58,28 @@ export type ProgressEvent =
 export async function resetProgress(studentId: string, grade: number): Promise<ProgressRecord> {
   const store = await readStore();
   const record = blank(studentId, grade);
-  store[studentId] = record;
+  store[key(studentId, grade)] = record;
+  const legacy = store[studentId];
+  if (legacy?.grade === grade) delete store[studentId];
   await writeStore(store);
   return record;
 }
 
-export async function getProgress(studentId: string): Promise<ProgressRecord> {
+export async function getProgress(studentId: string, grade: number): Promise<ProgressRecord> {
   const store = await readStore();
-  return store[studentId] ?? blank(studentId, 8);
+  const saved = store[key(studentId, grade)];
+  if (saved) return saved;
+  const legacy = store[studentId];
+  if (legacy?.grade === grade) return legacy;
+  return blank(studentId, grade);
 }
 
 export async function recordProgress(studentId: string, event: ProgressEvent): Promise<ProgressRecord> {
   const store = await readStore();
-  const record = store[studentId] ?? blank(studentId, event.grade);
+  const id = key(studentId, event.grade);
+  const legacy = store[studentId];
+  const record = store[id] ?? (legacy?.grade === event.grade ? { ...legacy } : blank(studentId, event.grade));
+  if (legacy?.grade === event.grade) delete store[studentId];
   record.grade = event.grade;
   const entry = { at: new Date().toISOString(), label: "label" in event ? event.label : "Quiz", kind: event.type };
   if (event.type === "topic" && !record.topics.includes(event.label)) record.topics.push(event.label);
@@ -78,7 +91,7 @@ export async function recordProgress(studentId: string, event: ProgressEvent): P
   }
   if (event.type === "quiz") record.quizzes.push({ score: event.score, total: event.total, at: entry.at });
   record.recent = [entry, ...record.recent].slice(0, 12);
-  store[studentId] = record;
+  store[id] = record;
   await writeStore(store);
   return record;
 }

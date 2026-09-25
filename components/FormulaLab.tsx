@@ -1,16 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { formulas } from "@/content/formulas";
 import { TutorMessage } from "@/components/TutorMessage";
+import { benchFor } from "@/lib/calculators";
 import { UNIT_CHOICES } from "@/lib/units";
 import { listSolvers, solve } from "@/lib/solver";
 import type { TutorReply } from "@/lib/blocks";
 
-export function FormulaLab() {
-  const solvers = useMemo(() => listSolvers(), []);
-  const [formulaId, setFormulaId] = useState(solvers[0]?.id ?? "speed");
+export function FormulaLab({ grade }: { grade: number }) {
+  const bench = benchFor(grade);
+  const solvers = useMemo(() => {
+    if (!bench) return [];
+    const all = listSolvers();
+    return bench.ids.flatMap((id) => all.filter((item) => item.id === id));
+  }, [bench]);
+  const [formulaId, setFormulaId] = useState(solvers[0]?.id ?? "");
   const spec = solvers.find((item) => item.id === formulaId) ?? solvers[0];
-  const [find, setFind] = useState(spec.finds[0]);
+  const [find, setFind] = useState(spec?.finds[0] ?? "");
   const [values, setValues] = useState<Record<string, string>>({});
   const [units, setUnits] = useState<Record<string, string>>({});
   const [reply, setReply] = useState<TutorReply | null>(null);
@@ -18,12 +25,14 @@ export function FormulaLab() {
   function chooseFormula(nextId: string) {
     const next = solvers.find((item) => item.id === nextId);
     setFormulaId(nextId);
-    setFind(next?.finds[0] ?? "v");
+    setFind(next?.finds[0] ?? "");
+    setValues({});
+    setUnits({});
     setReply(null);
   }
 
   function check() {
-    if (!spec) return;
+    if (!spec || !find) return;
     const known: Record<string, { value: number; unit: string }> = {};
     for (const variable of spec.variables) {
       if (variable.key === find) continue;
@@ -52,18 +61,19 @@ export function FormulaLab() {
     });
   }
 
-  if (!spec) return null;
+  if (!bench || !spec) return null;
+  const formulaName = (id: string) => formulas.find((item) => item.id === id)?.name ?? id.replaceAll("-", " ");
 
   return (
-    <section className="panel">
-      <h2 style={{ marginTop: 0 }}>Formula lab</h2>
-      <p className="muted">Enter the measurements you know. The checker only returns a number it can compute.</p>
+    <section className="panel calculator-panel">
+      <h2 style={{ marginTop: 0 }}>{bench.title}</h2>
+      <p className="muted">{bench.note}</p>
       <label className="field">
         Formula
         <select className="line" value={spec.id} onChange={(event) => chooseFormula(event.target.value)}>
           {solvers.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.id}
+              {formulaName(item.id)}
             </option>
           ))}
         </select>
@@ -78,7 +88,7 @@ export function FormulaLab() {
           ))}
         </select>
       </label>
-      <div className="split" style={{ marginTop: 12 }}>
+      <div className="calc-fields">
         {spec.variables
           .filter((variable) => variable.key !== find)
           .map((variable) => (

@@ -39,12 +39,12 @@ function voice(grade: number): string {
     return "The student is in primary school. Use about five short sentences. Simple words, one familiar example, and no algebraic symbols.";
   }
   if (grade <= 8) {
-    return "The student is in middle school. Explain what it is, why it happens, and give one example. If a formula helps, say it in words, not as a derivation.";
+    return "The student is in middle school. Explain what it is, why it happens, and give one example. When a formula helps, write it as $v = s/t$ and also say it in words.";
   }
   if (grade <= 10) {
-    return "The student is in Class 9 or 10. Give a school definition, the formula they are expected to use, what each quantity means, one example, and one common mistake. Do not add university material.";
+    return "The student is in Class 9 or 10. Give a school definition, the formula they are expected to use, what each quantity means, one example, and one common mistake. Write every formula between dollar signs, for example $F = ma$. Do not add university material.";
   }
-  return "The student is in Class 11 or 12. Give a precise definition, the standard formula, the conditions when it applies, and a short example. Keep the mathematics.";
+  return "The student is in Class 11 or 12. Give a precise definition, the standard formula, the conditions when it applies, and a short example. Write every formula between dollar signs, for example $A = \\pi r^{2}$, so the symbols can be drawn.";
 }
 
 function paragraphs(text: string): string[] {
@@ -53,6 +53,10 @@ function paragraphs(text: string): string[] {
     .map((part) =>
       part
         .replace(/\*\*/g, "")
+        .replace(/\*(\$)/g, "$1")
+        .replace(/(\$)\*/g, "$1")
+        .replace(/(^|\s)\*([^*$\n]+)\*(?=\s|$)/g, "$1$2")
+        .replace(/^[-*]\s+/, "")
         .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
         .replace(/\[[^\]]*\]/g, "")
         .replace(/^#+\s*/, "")
@@ -65,20 +69,32 @@ function paragraphs(text: string): string[] {
   return parts.slice(0, 6);
 }
 
-export async function answerOutsideNotes(question: string, grade: number): Promise<TutorReply | null> {
+export async function answerOutsideNotes(question: string, grade: number, earlier = ""): Promise<TutorReply | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
   const ai = new GoogleGenAI({ apiKey });
   const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const numerical = /\d/.test(question) || /\d/.test(earlier);
   const prompt = [
     `Answer this for a Class ${grade} student.`,
     voice(grade),
-    "Use Google Search so the science is current, then write only the answer.",
+    earlier
+      ? "Earlier messages are below. If this question continues that problem, keep those measurements and answer the new part. If this is a different problem, ignore the earlier messages."
+      : "",
+    earlier ? `Earlier messages:\n${earlier}` : "",
+    numerical
+      ? "This is a sum. The first sentence must be the final number with its unit. Then derive it in order: what is given, the formula, each substitution, and the arithmetic that produces the result. If a measurement needed for the sum is missing, name that missing fact and do not invent it. Do not stop after defining the idea."
+      : "Use Google Search so the science is current, then write only the answer. If there is no number to find, explain the idea.",
+    grade >= 6
+      ? "Write formulas only between dollar signs, for example $A = \\pi r^{2}$. Do not use asterisks or backslash-words outside those signs."
+      : "Do not use dollar signs or algebraic symbols.",
     "Do not mention notes, websites, sources, search, or that anything was looked up.",
     "Do not add a heading such as Direct Answer.",
     "Do not help with weapons, crime, or harming someone.",
     `Question: ${question}`,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   try {
     const response = await ai.models.generateContent({
@@ -86,8 +102,8 @@ export async function answerOutsideNotes(question: string, grade: number): Promi
       contents: prompt,
       config: {
         temperature: 0.2,
-        maxOutputTokens: grade <= 5 ? 280 : 700,
-        tools: [{ googleSearch: {} }],
+        maxOutputTokens: numerical ? 1000 : grade <= 5 ? 280 : 700,
+        ...(numerical ? {} : { tools: [{ googleSearch: {} }] }),
       },
     });
     const text = response.text?.trim();

@@ -1,4 +1,5 @@
 import type { KnownValue } from "@/content/types";
+import { formatNumber } from "@/lib/number";
 import { solve, type SolveRequest, type SolveResult } from "@/lib/solver";
 
 const EMPTY: SolveResult = {
@@ -87,14 +88,15 @@ function finish(request: SolveRequest, text: string): SolveResult {
   const result = solve(request);
   if (result.status !== "verified") return result;
   const direction = text.match(/\b(north|south|east|west|upwards|up|downwards|down)\b/i);
-  if (/velocity/i.test(text)) {
+  if (request.find === "v" && /velocity/i.test(text)) {
     if (direction) {
       const way = direction[1].toLowerCase();
-      result.message = `${result.display} ${way}. The checker verified the magnitude, and the direction is ${way}.`;
+      result.message = `${result.display} ${way}. The direction is ${way}.`;
     } else {
-      result.message = `${result.display}. The checker verified the magnitude. Velocity also needs a direction, and this question did not give one.`;
+      result.message = `${result.display}. Velocity also needs a direction, and this question did not give one.`;
     }
   }
+  result.request = request;
   return result;
 }
 
@@ -209,7 +211,7 @@ export function parseWordProblem(text: string): SolveRequest | null {
     };
   }
 
-  const asksMotion = /velocity|speed|how fast|acceleration|displacement|how far/i.test(clean);
+  const asksMotion = /velocity|speed|how fast|acceleration|displacement|how far|distance/i.test(clean);
   if ((fromRest || acceleration) && asksMotion) {
     const time = timeOf(clean);
     const distance = distanceOf(clean);
@@ -217,16 +219,19 @@ export function parseWordProblem(text: string): SolveRequest | null {
     if (fromRest) known.u = { value: 0, unit: "m/s" };
     if (acceleration) known.a = knownOf(acceleration);
     if (time) known.t = knownOf(time);
-    if (distance && !/m\/s/i.test(clean.slice(clean.indexOf(distance.unit) - 2))) known.s = knownOf(distance);
+    if (distance && !/m\/s/i.test(clean.slice(Math.max(0, clean.indexOf(String(distance.value))) - 4))) known.s = knownOf(distance);
     const wantsSpeed = /velocity|speed|how fast/i.test(clean);
+    const wantsDistance = /how far|how much distance|distance will|displacement|cover/i.test(clean);
     if (wantsSpeed && known.a && known.t && known.u) {
       return { formulaId: "v-uat", known, find: "v" };
     }
     if (wantsSpeed && known.a && known.s && known.u && !known.t) {
       return { formulaId: "v2-uas", known, find: "v" };
     }
-    if (/how far|displacement|distance/i.test(clean) && known.u && known.a && known.t) {
-      return { formulaId: "s-uat", known, find: "s" };
+    if (wantsDistance && known.u && known.a && known.t) {
+    const distanceKnown = { ...known };
+    delete distanceKnown.s;
+    return { formulaId: "s-uat", known: distanceKnown, find: "s" };
     }
   }
 
@@ -247,9 +252,109 @@ export function parseWordProblem(text: string): SolveRequest | null {
   return null;
 }
 
+function companion(primary: SolveRequest, clean: string): SolveRequest | null {
+  const wantsDistance = /how far|how much distance|distance will|displacement|\bcover\b/i.test(clean);
+  const wantsSpeed = /velocity|speed|how fast/i.test(clean);
+  const motion = primary.known.u && primary.known.a && primary.known.t
+    ? { u: primary.known.u, a: primary.known.a, t: primary.known.t }
+    : null;
+  if (!motion) return null;
+  if (primary.find !== "s" && wantsDistance) return { formulaId: "s-uat", known: motion, find: "s" };
+  if (primary.find !== "v" && wantsSpeed) return { formulaId: "v-uat", known: motion, find: "v" };
+  return null;
+}
+
+const FRESH = /\b(a|an)\s+[a-z]+(?:\s+[a-z]+){0,4}\s+(starts|travels|covers|moves|accelerates|is raised|weighs|has)\b/i;
+
+export function followUp(previous: SolveRequest, message: string): SolveRequest | null {
+  const clean = normalize(message);
+  if (FRESH.test(clean) && /\d/.test(clean)) return null;
+  const own = parseWordProblem(clean);
+  if (own && /\d/.test(clean) && FRESH.test(clean)) return null;
+  const wantsDistance = /how far|how much distance|distance|displacement|\bcover\b/i.test(clean);
+  const wantsSpeed = /velocity|speed|how fast/i.test(clean);
+  const wantsForce = /force/i.test(clean);
+  const follow =
+    wantsDistance ||
+    wantsSpeed ||
+    wantsForce ||
+    /\b(what about|and the|also|now find|this time|that time|same)\b/i.test(clean);
+  if (!follow) return null;
+  const known = { ...previous.known };
+  const acceleration = accelerationOf(clean);
+  const time = timeOf(clean);
+  if (acceleration) known.a = knownOf(acceleration);
+  if (time) known.t = knownOf(time);
+  if (fromRest(clean)) known.u = { value: 0, unit: "m/s" };
+  if (wantsDistance && known.u && known.a && known.t) {
+    return { formulaId: "s-uat", known: { u: known.u, a: known.a, t: known.t }, find: "s" };
+  }
+  if (wantsSpeed && known.u && known.a && known.t) {
+    return { formulaId: "v-uat", known: { u: known.u, a: known.a, t: known.t }, find: "v" };
+  }
+  if (wantsForce && known.m && known.a) {
+    return { formulaId: "newton-second", known: { m: known.m, a: known.a }, find: "F" };
+  }
+  return null;
+}
+
+function fromRest(text: string) {
+  return /from rest|starts at rest|initially at rest/i.test(text);
+}
+
+function circleArea(text: string): SolveResult | null {
+  if (!/\barea\b/i.test(text) || !/\bcircle\b/i.test(text)) return null;
+  if (/\b(centripetal|angular|orbit|period)\b/i.test(text)) return null;
+  const radius = text.match(/\bradius\b[^0-9]{0,48}(\d+(?:\.\d+)?)\s*(mm|cm|m|km)\b/i);
+  const diameter = text.match(/\bdiameter\b[^0-9]{0,48}(\d+(?:\.\d+)?)\s*(mm|cm|m|km)\b/i);
+  const found = radius ?? diameter;
+  if (!found) return null;
+  const given = Number(found[1]);
+  const unit = found[2].toLowerCase();
+  const length = radius ? given : given / 2;
+  if (!Number.isFinite(length) || length <= 0) return null;
+  const area = Math.PI * length * length;
+  const squared = length * length;
+  const display = `${formatNumber(area)} ${unit}²`;
+  const unitTex = unit === "m" ? "m" : `\\mathrm{${unit}}`;
+  return {
+    status: "verified",
+    value: area,
+    unit: `${unit}²`,
+    display,
+    assumptions: [
+      radius
+        ? "The shape is a circle, and the given length is the radius."
+        : "The shape is a circle. The radius is half the given diameter.",
+    ],
+    message: `Checked by direct calculation: ${display}.`,
+    steps: [
+      {
+        text: radius
+          ? `Given: radius r = ${formatNumber(given)} ${unit}.`
+          : `Given: diameter = ${formatNumber(given)} ${unit}, so the radius is half of that, r = ${formatNumber(length)} ${unit}.`,
+      },
+      {
+        text: "The area of a circle is found from its radius.",
+        latex: "A = \\pi r^{2}",
+      },
+      {
+        text: `Square the radius: r² = (${formatNumber(length)})² = ${formatNumber(squared)} ${unit}².`,
+        latex: `r^{2} = (${formatNumber(length)})^{2} = ${formatNumber(squared)}\\,${unitTex}^{2}`,
+      },
+      {
+        text: `Multiply by π: A = π × ${formatNumber(squared)} = ${display}.`,
+        latex: `A = \\pi \\times ${formatNumber(squared)} = ${formatNumber(area)}\\,${unitTex}^{2}`,
+      },
+    ],
+  };
+}
+
 export function solveWordProblem(text: string): SolveResult {
   const clean = normalize(text);
   if (!/\d/.test(clean) && !/from rest/i.test(clean)) return EMPTY;
+  const circle = circleArea(clean);
+  if (circle) return circle;
   const journey = averageJourney(clean);
   if (journey) return journey;
   const request = parseWordProblem(clean);
@@ -258,7 +363,13 @@ export function solveWordProblem(text: string): SolveResult {
       "I can see numbers, but they do not match a formula I am allowed to calculate. Use the formula lab, or tell me the missing measurement. I will not guess.",
     );
   }
-  return finish(request, clean);
+  const result = finish(request, clean);
+  const extra = companion(request, clean);
+  if (extra) {
+    const second = finish(extra, clean);
+    if (second.status === "verified") result.extras = [second];
+  }
+  return result;
 }
 
 const CHANGE: Record<string, string> = {

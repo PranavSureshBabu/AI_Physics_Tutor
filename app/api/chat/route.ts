@@ -1,6 +1,7 @@
 import { recordProgress, type ProgressEvent } from "@/lib/progress";
 import { readConversation, saveConversation } from "@/lib/memory";
-import { answerQuestion, type TutorMode } from "@/lib/tutor";
+import { answerOutsideNotes } from "@/lib/gemini";
+import { answerQuestion, type Answer, type TutorMode } from "@/lib/tutor";
 
 export const runtime = "nodejs";
 
@@ -25,14 +26,28 @@ export async function POST(request: Request) {
   const mode = body.mode === "numerical" || body.mode === "learn" ? body.mode : "doubt";
   const conversationId = validId(body.conversationId) ? body.conversationId : crypto.randomUUID();
   const existing = await readConversation(conversationId);
+  const history = (existing?.turns ?? []).map((turn) => ({ role: turn.role, text: turn.text }));
   const previousSolve = [...(existing?.turns ?? [])].reverse().find((turn) => turn.solve)?.solve;
-  const reply = await answerQuestion({
-    grade,
-    message,
-    mode,
-    topicId: body.topicId,
-    previousSolve,
-  });
+  let reply: Answer;
+  try {
+    reply = await answerQuestion({
+      grade,
+      message,
+      mode,
+      topicId: body.topicId,
+      previousSolve,
+      history,
+    });
+  } catch {
+    reply = (await answerOutsideNotes(message, grade)) ?? {
+      blocks: [
+        {
+          type: "text" as const,
+          text: `I could not finish that for Class ${grade}. Try the question in one or two sentences, with the numbers and units written out.`,
+        },
+      ],
+    };
+  }
   await saveConversation({
     id: conversationId,
     grade,

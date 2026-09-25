@@ -16,6 +16,8 @@ export type SolveResult = {
   message: string;
   formulaId?: string;
   assumptions: string[];
+  request?: SolveRequest;
+  extras?: SolveResult[];
 };
 
 export type SolveRequest = {
@@ -744,6 +746,34 @@ function humanList(labels: string[]): string {
   return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
+function unitTex(unit: string): string {
+  return `\\mathrm{${unit.replace(/²/g, "^{2}").replace(/³/g, "^{3}")}}`;
+}
+
+function plugNumber(key: string, si: Record<string, number>): string {
+  return formatNumber(si[key]);
+}
+
+function plugLatex(request: SolveRequest, si: Record<string, number>, value: number): string | undefined {
+  const n = (key: string) => plugNumber(key, si);
+  const answer = `${formatNumber(value)}\\,${unitTex(siUnit(byId.get(request.formulaId)?.variables.find((item) => item.key === request.find)?.dimension ?? "dimensionless") || "1")}`;
+  const id = request.formulaId;
+  const find = request.find;
+  if ((id === "v-uat" || id === "acceleration") && find === "v") return `v = ${n("u")} + ${n("a")} \\times ${n("t")} = ${answer}`;
+  if (id === "v-uat" && find === "u") return `u = ${n("v")} - ${n("a")} \\times ${n("t")} = ${answer}`;
+  if (id === "v-uat" && find === "a") return `a = \\dfrac{${n("v")} - ${n("u")}}{${n("t")}} = ${answer}`;
+  if (id === "v-uat" && find === "t") return `t = \\dfrac{${n("v")} - ${n("u")}}{${n("a")}} = ${answer}`;
+  if (id === "s-uat" && find === "s") return `s = ${n("u")} \\times ${n("t")} + \\dfrac{1}{2} \\times ${n("a")} \\times ${n("t")}^{2} = ${answer}`;
+  if (id === "v2-uas" && find === "v") return `v = \\sqrt{${n("u")}^{2} + 2 \\times ${n("a")} \\times ${n("s")}} = ${answer}`;
+  if ((id === "speed" || id === "velocity" || id === "average-speed") && find === "v") return `v = \\dfrac{${n("s")}}{${n("t")}} = ${answer}`;
+  if (id === "newton-second" && find === "F") return `F = ${n("m")} \\times ${n("a")} = ${answer}`;
+  if (id === "momentum" && find === "p") return `p = ${n("m")} \\times ${n("v")} = ${answer}`;
+  if (id === "kinetic-energy" && find === "K") return `K = \\dfrac{1}{2} \\times ${n("m")} \\times ${n("v")}^{2} = ${answer}`;
+  if (id === "potential-energy" && find === "U") return `U = ${n("m")} \\times ${n("g")} \\times ${n("h")} = ${answer}`;
+  if (id === "weight" && find === "W") return `W = ${n("m")} \\times ${n("g")} = ${answer}`;
+  return undefined;
+}
+
 function friendlyDisplay(spec: FormulaSpec, find: string, siValue: number, known: Record<string, KnownValue>): string {
   const variable = spec.variables.find((item) => item.key === find);
   const dimension = variable?.dimension ?? "dimensionless";
@@ -903,7 +933,11 @@ export function solve(request: SolveRequest): SolveResult {
   if (given.length) answerSteps.push({ text: `Given: ${given.join("; ")}.` });
   answerSteps.push(...steps);
   if (formula) {
-    answerSteps.push({ text: `Formula: ${formula.plain}.`, latex: formula.latex });
+    answerSteps.push({ text: formula.meaning, latex: formula.latex });
+    const plugged = plugLatex(request, si, computed);
+    if (plugged) {
+      answerSteps.push({ text: "The given values go straight into the formula.", latex: plugged });
+    }
   }
   answerSteps.push({ text: `${findLabel} = ${display}.` });
 

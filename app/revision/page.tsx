@@ -20,7 +20,7 @@ export default function RevisionPage() {
   return (
     <main>
       <PageGuide href="/revision" />
-      <div className="class-row" style={{ marginBottom: 16 }}>
+      <div className="chapter-grid">
         {chapters.map((item) => (
           <button key={item.id} className={item.id === chapter.id ? "class-pill on" : "class-pill"} type="button" onClick={() => setChapterId(item.id)}>
             {item.title}

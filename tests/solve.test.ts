@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { applyChange, solveWordProblem } from "../lib/word-problem";
+import { applyChange, followUp, solveWordProblem } from "../lib/word-problem";
 import { solve } from "../lib/solver";
 
 function close(actual: number | undefined, expected: number) {
@@ -116,5 +116,30 @@ const badUnit = solve({
   find: "F",
 });
 assert.equal(badUnit.status, "cannot_verify");
+
+const circle = solveWordProblem("The radius of a circle is 3.12 m. Calculate the area of the circle");
+assert.equal(circle.status, "verified");
+close(circle.value, Math.PI * 3.12 * 3.12);
+assert.match(circle.display ?? "", /30\.58 m²/);
+assert.equal(circle.steps.some((step) => step.latex === "A = \\pi r^{2}"), true);
+
+const racing = solveWordProblem(
+  "A racing car starts from rest and accelerates uniformly at a rate of 4 m/s². What will be its velocity after 10 seconds? How much distance will it cover in this time?",
+);
+assert.equal(racing.status, "verified");
+close(racing.value, 40);
+assert.equal(racing.extras?.length, 1);
+close(racing.extras?.[0].value, 200);
+assert.ok(racing.steps.some((step) => step.latex?.includes("0 + 4")));
+
+const distanceOnly = followUp(racing.request!, "How much distance will it cover in this time?");
+assert.ok(distanceOnly);
+assert.equal(distanceOnly?.find, "s");
+const distance = solve(distanceOnly!);
+assert.equal(distance.status, "verified");
+close(distance.value, 200);
+
+const fresh = followUp(racing.request!, "A bus covers 120 km in 2 hours. What is its speed?");
+assert.equal(fresh, null);
 
 console.log("solver tests passed");

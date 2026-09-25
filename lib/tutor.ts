@@ -1,9 +1,10 @@
 import type { TutorReply } from "@/lib/blocks";
+import { getFormula } from "@/content/formulas";
 import { answerOutsideNotes } from "@/lib/gemini";
 import { replyToDoubt } from "@/lib/lesson";
 import { retrieve } from "@/lib/rag";
-import { solve, type SolveRequest } from "@/lib/solver";
-import { applyChange, parseWordProblem, solveWordProblem } from "@/lib/word-problem";
+import { solve, type SolveRequest, type SolveResult } from "@/lib/solver";
+import { applyChange, followUp, parseWordProblem, solveWordProblem } from "@/lib/word-problem";
 
 export type TutorMode = "doubt" | "numerical" | "learn";
 
@@ -13,6 +14,7 @@ export type AnswerInput = {
   mode: TutorMode;
   topicId?: string;
   previousSolve?: SolveRequest;
+  history?: { role: "user" | "tutor"; text: string }[];
 };
 
 export type Answer = TutorReply & { solveRequest?: SolveRequest };
@@ -31,24 +33,42 @@ function cannot(message: string): Answer {
   };
 }
 
-function fromSolve(result: ReturnType<typeof solve>, grade: number): Answer {
+function usefulNote(result: SolveResult): string {
+  if (!result.message || result.message.startsWith("Checked by direct calculation")) return "";
+  return result.message;
+}
+
+function partBlocks(result: SolveResult, grade: number, titled: boolean): TutorReply["blocks"] {
+  const steps = grade <= 5 ? result.steps.map((step) => ({ text: step.text })) : result.steps;
+  const note = usefulNote(result);
+  return [
+    ...(titled
+      ? [{ type: "subheading" as const, text: getFormula(result.formulaId ?? "")?.name ?? "Next part", depth: "part" as const }]
+      : []),
+    { type: "steps" as const, title: "Steps", steps },
+    ...(result.assumptions.length
+      ? [{ type: "callout" as const, tone: "remember" as const, title: "Assumption", text: result.assumptions.join(" ") }]
+      : []),
+    ...(note ? [{ type: "text" as const, text: note }] : []),
+  ];
+}
+
+function fromSolve(result: SolveResult, grade: number): Answer {
+  const parts = [result, ...(result.extras ?? [])];
   if (result.status === "verified") {
     const lead =
       grade <= 5
-        ? "Here is the checked number, said as simply as I can. The calculator did the arithmetic."
-        : "The calculator checked this. I am not estimating the number.";
+        ? "Here is the checked number, said as simply as I can."
+        : parts.length > 1
+          ? "Both parts are checked below. Each formula shows the given numbers in place."
+          : "The steps put the given numbers into the formula.";
     return {
       blocks: [
         { type: "heading", text: "Checked solution" },
         { type: "text", text: lead },
-        { type: "steps", title: "Steps", steps: result.steps },
-        ...(result.assumptions.length
-          ? [{ type: "callout" as const, tone: "remember" as const, title: "Assumption", text: result.assumptions.join(" ") }]
-          : []),
-        { type: "text", text: result.message },
-        { type: "confidence", level: "verified", note: "Verified by direct calculation." },
+        ...parts.flatMap((part) => partBlocks(part, grade, parts.length > 1)),
       ],
-      solveRequest: undefined,
+      solveRequest: result.request,
     };
   }
   if (result.status === "needs_info") {
@@ -57,7 +77,6 @@ function fromSolve(result: ReturnType<typeof solve>, grade: number): Answer {
         { type: "heading", text: "I need one more fact" },
         { type: "text", text: result.message },
         ...(result.steps.length ? [{ type: "steps" as const, title: "What I already have", steps: result.steps }] : []),
-        { type: "confidence", level: "needs_info", note: "I will not fill the gap with a guess." },
       ],
     };
   }
@@ -65,7 +84,6 @@ function fromSolve(result: ReturnType<typeof solve>, grade: number): Answer {
     blocks: [
       { type: "heading", text: "I cannot check this yet" },
       { type: "text", text: result.message },
-      { type: "confidence", level: "cannot_answer", note: "The checker refused this one." },
     ],
   };
 }
@@ -74,36 +92,60 @@ export async function answerQuestion(input: AnswerInput): Promise<Answer> {
   const message = input.message.trim();
   if (!message) return cannot("Type a question and I will use your class notes.");
 
-  if (input.previousSolve) {
+  if (input.previousSolve && /\b(what if|instead|rather)\b/i.test(message)) {
     const changed = applyChange(input.previousSolve, message);
     if (changed) {
       const result = solve(changed);
-      const reply = fromSolve(result, input.grade);
-      if (result.status === "verified") reply.solveRequest = changed;
-      return reply;
+      if (result.status === "verified") {
+        const reply = fromSolve(result, input.grade);
+        reply.solveRequest = changed;
+        return reply;
+      }
     }
   }
 
-  const word = solveWordProblem(message);
-  const looksNumerical = word.status !== "not_calculation";
-  if (input.mode === "numerical" || looksNumerical) {
-    if (word.status === "not_calculation" && input.mode === "numerical") {
-      // A concept question can still be answered from the notes.
-    } else if (word.status !== "not_calculation") {
-      const reply = fromSolve(word, input.grade);
-      if (word.status === "verified") reply.solveRequest = parseWordProblem(message) ?? undefined;
-      return reply;
+  let word: ReturnType<typeof solveWordProblem>;
+  try {
+    word = solveWordProblem(message);
+  } catch {
+    word = { status: "not_calculation", message: "", steps: [], assumptions: [] };
+  }
+  if (word.status === "verified") {
+    const reply = fromSolve(word, input.grade);
+    reply.solveRequest = word.request ?? parseWordProblem(message) ?? undefined;
+    return reply;
+  }
+
+  if (input.previousSolve) {
+    const next = followUp(input.previousSolve, message);
+    if (next) {
+      const result = solve(next);
+      if (result.status === "verified") {
+        const reply = fromSolve(result, input.grade);
+        reply.solveRequest = next;
+        return reply;
+      }
     }
   }
+
+  const hasNumbers = /\d/.test(message);
+  if (!hasNumbers && !input.previousSolve) {
+    const found = retrieve(message, input.grade, input.topicId);
+    if (found && found.confidence !== "low") return replyToDoubt(found.topic, input.grade);
+  }
+
+  const earlier = (input.history ?? [])
+    .slice(-6)
+    .map((turn) => `${turn.role === "user" ? "Student" : "Tutor"}: ${turn.text}`)
+    .join("\n");
+  const outside = await answerOutsideNotes(message, input.grade, earlier);
+  if (outside) return outside;
+
+  if (word.status === "needs_info" || word.status === "cannot_verify") return fromSolve(word, input.grade);
 
   const found = retrieve(message, input.grade, input.topicId);
-  if (!found || found.confidence === "low") {
-    const outside = await answerOutsideNotes(message, input.grade);
-    if (outside) return outside;
-    return cannot(
-      `This is not in your Class ${input.grade} notes, and I could not look it up. I will not invent an explanation.`,
-    );
-  }
-
-  return replyToDoubt(found.topic, input.grade);
+  if (found && found.confidence !== "low") return replyToDoubt(found.topic, input.grade);
+  return cannot(
+    `This is not in your Class ${input.grade} notes, and I could not look it up. I will not invent an explanation.`,
+  );
 }
