@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageGuide } from "@/components/PageGuide";
 import { useStudent } from "@/components/StudentProvider";
 import type { ProgressRecord } from "@/lib/progress";
 
@@ -44,7 +45,7 @@ export default function ProgressPage() {
 
   return (
     <main>
-      <h1 className="page-title">Progress</h1>
+      <PageGuide href="/progress" />
       <section className="action-grid">
         <article className="stat panel">
           <b>{record?.topics.length ?? 0}</b>

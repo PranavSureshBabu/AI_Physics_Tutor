@@ -1,6 +1,7 @@
 "use client";
 
 import { ChatPanel } from "@/components/ChatPanel";
+import { PageGuide } from "@/components/PageGuide";
 import { FormulaLab } from "@/components/FormulaLab";
 import { useStudent } from "@/components/StudentProvider";
 
@@ -16,12 +17,14 @@ export default function NumericalsPage() {
         ];
 
   return (
-    <main className="split">
+    <main>
+      <PageGuide href="/numericals" />
+      <div className="split">
       <div>
-        <h1 className="page-title">Solve a numerical</h1>
         <ChatPanel mode="numerical" placeholder="Type a physics problem" suggestions={suggestions} />
       </div>
       <FormulaLab />
+      </div>
     </main>
   );
 }

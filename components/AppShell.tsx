@@ -1,81 +1,96 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { NAV } from "@/components/nav";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { LoginGate } from "@/components/LoginGate";
+import { NavIcon } from "@/components/NavIcon";
+import { TOOLS } from "@/components/nav";
 import { useStudent } from "@/components/StudentProvider";
 import { grades } from "@/content/grades";
 
-function AtomMark() {
-  return (
-    <svg width="42" height="42" viewBox="0 0 42 42" aria-hidden="true">
-      <rect width="42" height="42" rx="14" fill="#2f6bff" />
-      <circle cx="21" cy="21" r="4" fill="white" />
-      <ellipse cx="21" cy="21" rx="14" ry="5.5" fill="none" stroke="white" strokeWidth="1.7" />
-      <ellipse cx="21" cy="21" rx="5.5" ry="14" fill="none" stroke="#ffd9cf" strokeWidth="1.7" />
-    </svg>
-  );
-}
+const groups = ["Study", "Practice", "Review"] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { grade, setGrade } = useStudent();
+  const router = useRouter();
+  const { grade, username, signOut, ready, classOpen } = useStudent();
   const info = grades.find((item) => item.grade === grade);
 
+  useEffect(() => {
+    if (ready && username && !classOpen && pathname !== "/") router.replace("/");
+  }, [ready, username, classOpen, pathname, router]);
+
+  if (!ready) return <div className="boot" />;
+  if (!username) return <LoginGate />;
+
+  function linkClass(href: string) {
+    const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+    return active ? "nav-link active" : "nav-link";
+  }
+
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <AtomMark />
-          <div>
-            <strong>Physics Tutor</strong>
-            <span>Classes 1 to 12</span>
+    <div className={classOpen ? "shell" : "shell picking"}>
+      {classOpen ? (
+        <aside className="sidebar">
+          <div className="brand">
+            <div>
+              <strong>Physics Tutor</strong>
+              <span>{username}</span>
+            </div>
           </div>
-        </div>
-        <nav>
-          {NAV.map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-            return (
-              <Link key={item.href} href={item.href} className={active ? "nav-link active" : "nav-link"}>
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </aside>
-      <div className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="muted" style={{ margin: 0 }}>
-              {info?.label} · {info?.subject}
-            </p>
-            <strong>{info?.summary}</strong>
-          </div>
-          <div className="class-row" aria-label="Choose your class">
-            {grades.map((item) => (
-              <button
-                key={item.grade}
-                className={item.grade === grade ? "class-pill on" : "class-pill"}
-                onClick={() => setGrade(item.grade)}
-                type="button"
-              >
-                {item.grade}
-              </button>
+          <nav>
+            <Link href="/" className={linkClass("/")}>
+              <NavIcon name="home" />
+              Home
+            </Link>
+            {groups.map((group) => (
+              <div key={group}>
+                <p className="nav-group">
+                  <NavIcon name={group.toLowerCase()} />
+                  {group}
+                </p>
+                {TOOLS.filter((item) => item.group === group).map((item) => (
+                  <Link key={item.href} href={item.href} className={linkClass(item.href)}>
+                    <NavIcon name={item.href.slice(1)} />
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
             ))}
-          </div>
-        </header>
+          </nav>
+          <button className="text-button" type="button" onClick={signOut}>
+            Sign out
+          </button>
+        </aside>
+      ) : null}
+      <div className={classOpen ? "workspace" : "workspace picking"}>
+        {classOpen ? (
+          <header className="topbar">
+            <div>
+              <p className="eyebrow" style={{ marginBottom: 6 }}>
+                {info?.label} · {info?.subject}
+              </p>
+              <strong>{info?.summary}</strong>
+            </div>
+          </header>
+        ) : null}
         {children}
       </div>
-      <nav className="mobile-nav" aria-label="Mobile">
-        {NAV.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          return (
-            <Link key={item.href} href={item.href} className={active ? "active" : undefined}>
+      {classOpen ? (
+        <nav className="mobile-nav" aria-label="Pages">
+          <Link href="/" className={pathname === "/" ? "active" : undefined}>
+            <NavIcon name="home" />
+            Home
+          </Link>
+          {TOOLS.map((item) => (
+            <Link key={item.href} href={item.href} className={pathname.startsWith(item.href) ? "active" : undefined}>
+              <NavIcon name={item.href.slice(1)} />
               {item.label}
             </Link>
-          );
-        })}
-      </nav>
+          ))}
+        </nav>
+      ) : null}
     </div>
   );
 }

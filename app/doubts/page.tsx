@@ -1,6 +1,7 @@
 "use client";
 
 import { ChatPanel } from "@/components/ChatPanel";
+import { PageGuide } from "@/components/PageGuide";
 import { useStudent } from "@/components/StudentProvider";
 
 export default function DoubtsPage() {
@@ -16,8 +17,7 @@ export default function DoubtsPage() {
 
   return (
     <main>
-      <h1 className="page-title">Ask a doubt</h1>
-      <p className="muted">Ask in your own words. The answer is written for your class.</p>
+      <PageGuide href="/doubts" />
       <ChatPanel mode="doubt" placeholder="Ask a physics doubt" suggestions={suggestions} />
     </main>
   );

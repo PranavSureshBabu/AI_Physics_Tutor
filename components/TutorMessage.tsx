@@ -16,7 +16,7 @@ export function TutorMessage({ reply }: { reply: TutorReply }) {
       {reply.blocks.map((block, index) => {
         if (block.type === "heading") {
           return (
-            <h2 className="page-title" id={block.id} style={{ fontSize: "2rem" }} key={index}>
+            <h2 className="page-title" id={block.id} key={index}>
               {block.text}
             </h2>
           );

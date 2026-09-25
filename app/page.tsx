@@ -1,46 +1,92 @@
 "use client";
 
 import Link from "next/link";
-import { Sketch } from "@/components/Sketch";
-import { grades } from "@/content/grades";
+import { useState } from "react";
+import { ClassArt } from "@/components/ClassArt";
+import { TOOLS } from "@/components/nav";
 import { useStudent } from "@/components/StudentProvider";
+import { bands, grades } from "@/content/grades";
 
-const actions = [
-  { href: "/learn", title: "Learn a Concept", text: "Chapter, topic, example, and a quick check.", accent: "#2f6bff" },
-  { href: "/doubts", title: "Ask a Doubt", text: "Ask in your own words. I stay inside the class notes.", accent: "#6d5ef5" },
-  { href: "/numericals", title: "Solve a Numerical", text: "Word problems and a calculator that checks the arithmetic.", accent: "#ff6a45" },
-  { href: "/practice", title: "Practice", text: "Try a question, then reveal the checked answer.", accent: "#0e9b78" },
-  { href: "/quiz", title: "Quiz", text: "Five short questions from your class.", accent: "#e7a61a" },
-  { href: "/revision", title: "Revision", text: "Formulas, key points, and common mistakes.", accent: "#152033" },
-];
+const groups = ["Study", "Practice", "Review"] as const;
 
 export default function HomePage() {
-  const { grade } = useStudent();
+  const { grade, username, classOpen, confirmClass, reopenClass, signOut } = useStudent();
   const info = grades.find((item) => item.grade === grade);
+  const [picked, setPicked] = useState("");
+
+  if (!classOpen) {
+    return (
+      <main className="class-stage">
+        <div className="class-photos" aria-hidden="true">
+          <img src="/photos/children-young.jpg" alt="" />
+          <img src="/photos/children-class.jpg" alt="" />
+          <img src="/photos/children-lab.jpg" alt="" />
+        </div>
+        <section className="class-panel">
+          <p className="eyebrow">Hello, {username}</p>
+          <h1 className="page-title">Select your class</h1>
+          <p className="class-lead">
+            Choose the class you study. The next page opens only that class.
+          </p>
+          <label className="class-select tall">
+            Your class
+            <select
+              value={picked}
+              onChange={(event) => {
+                const next = event.target.value;
+                setPicked(next);
+                if (next) confirmClass(Number(next));
+              }}
+              aria-label="Select your class"
+            >
+              <option value="">Select your class</option>
+              {bands.map((band) => (
+                <optgroup key={band.id} label={band.name}>
+                  {band.grades.map((item) => (
+                    <option key={item} value={item}>
+                      Class {item}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+          <button className="text-button" type="button" onClick={signOut}>
+            Sign out
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <main>
-      <section className="hero-layout">
-        <div className="hero-copy">
-          <p className="hero-kicker">
-            {info?.label} · {info?.subject}
-          </p>
-          <h1 className="page-title">Hi! I&apos;m your Physics Tutor</h1>
-          <p style={{ maxWidth: 640, fontSize: "1.12rem" }}>
-            Open a chapter, read the figure the way you would in a textbook, and ask me to check the arithmetic before
-            you trust a number.
-          </p>
+    <main className="home">
+      <section className="class-ready">
+        <div className={`class-portrait band-${info?.band ?? "primary"}`}>
+          <ClassArt grade={grade} />
         </div>
-        <Sketch name="lens" caption="A convex lens brings parallel rays to the focus." />
+        <div>
+          <p className="eyebrow">{info?.label}</p>
+          <h1>{info?.subject}</h1>
+          <p>{info?.summary}</p>
+        </div>
+        <button className="ghost" type="button" onClick={reopenClass}>
+          Change class
+        </button>
       </section>
-      <section className="action-grid">
-        {actions.map((action) => (
-          <Link key={action.href} href={action.href} className="action" style={{ ["--accent" as string]: action.accent }}>
-            <b>{action.title}</b>
-            <span className="muted">{action.text}</span>
-          </Link>
-        ))}
-      </section>
+      {groups.map((group) => (
+        <section key={group} className="room-group">
+          <h2>{group}</h2>
+          <div className="room-grid">
+            {TOOLS.filter((tool) => tool.group === group).map((tool) => (
+              <Link key={tool.href} href={tool.href} className={`room-card shape-${tool.href.slice(1)} room-${group.toLowerCase()}`}>
+                <h3>{tool.label}</h3>
+                <p>{tool.note}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
     </main>
   );
 }

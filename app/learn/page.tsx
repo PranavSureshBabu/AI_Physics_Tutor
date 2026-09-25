@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { chaptersForGrade } from "@/content/curriculum";
+import { PageGuide } from "@/components/PageGuide";
 import { TutorMessage } from "@/components/TutorMessage";
 import { useStudent } from "@/components/StudentProvider";
 import { chapterPages } from "@/lib/lesson";
@@ -52,7 +53,9 @@ export default function LearnPage() {
   if (!chapter || !page) return <p>No notes for this class yet.</p>;
 
   return (
-    <main className="layout-2">
+    <main>
+      <PageGuide href="/learn" />
+      <div className="layout-2">
       <aside className="panel">
         <p className="muted" style={{ marginTop: 0 }}>
           Subject · {grade <= 10 && grade >= 6 ? "Science" : grade >= 11 ? "Physics" : "First ideas"}
@@ -80,7 +83,7 @@ export default function LearnPage() {
           </button>
         ))}
       </aside>
-      <div>
+      <div className="learn-read">
         <header className="book-banner">
           <p className="muted" style={{ margin: 0, fontWeight: 800 }}>
             Class {grade} · page {safeIndex + 1} of {pages.length}
@@ -99,6 +102,7 @@ export default function LearnPage() {
             Next page
           </button>
         </nav>
+      </div>
       </div>
     </main>
   );

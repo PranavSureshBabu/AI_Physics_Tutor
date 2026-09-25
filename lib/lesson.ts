@@ -320,44 +320,245 @@ function questionBlocks(topic: Topic, grade: number): TutorReply["blocks"] {
   return blocks;
 }
 
+function spread(text: string, size = 160): string[] {
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0);
+  if (sentences.length === 0) return [];
+  const groups: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (current && next.length > size) {
+      groups.push(current);
+      current = sentence;
+    } else {
+      current = next;
+    }
+  }
+  if (current) groups.push(current);
+  return groups;
+}
+
+function pointBlocks(topic: Topic, point: string, grade: number): TutorReply["blocks"] {
+  const blocks: TutorReply["blocks"] = [
+    { type: "text", text: point },
+    {
+      type: "text",
+      text:
+        grade <= 5
+          ? `In the words of this class: ${topic.younger}`
+          : `The idea this fact sits inside: ${topic.idea}`,
+    },
+    { type: "text", text: `Keep a case beside the fact. ${topic.example}` },
+  ];
+  if (grade >= 11 && topic.senior) blocks.push({ type: "text", text: topic.senior });
+  if (grade >= 6) {
+    blocks.push({
+      type: "text",
+      text: `The sentence that usually goes wrong is “${topic.mistake.wrong}” The sentence to keep is “${topic.mistake.right}”`,
+    });
+  }
+  return blocks;
+}
+
 function topicPages(topic: Topic, grade: number): LessonPage[] {
   const formulas = topic.formulaIds
     .map((id) => getFormula(id))
     .filter((formula) => formula !== undefined);
+  const figure = figureFor(topic);
   const pages: LessonPage[] = [
-    page(topic.id, topic.title, readingBlocks(topic, grade), topic.id),
-    page(`${topic.id}-careful`, clip(topic.mistake.wrong), cautionBlocks(topic, grade), topic.id),
+    page(
+      topic.id,
+      topic.title,
+      [
+        ...voiceLines(topic, grade).map((text) => ({ type: "text" as const, text })),
+        { type: "sketch", name: figure.name, caption: figure.caption },
+      ],
+      topic.id,
+    ),
   ];
-  if (formulas.length > 0 || (topic.worked && grade >= 6)) {
+
+  spread(topic.example, 200).forEach((part, index) => {
     pages.push(
       page(
-        `${topic.id}-relation`,
-        formulas[0] ? formulas[0].name : clip(topic.worked?.prompt ?? topic.title),
-        formulaBlocks(topic, grade, formulas),
+        `${topic.id}-case-${index + 1}`,
+        index === 0 ? clip(topic.example) : `${clip(topic.example)} ${index + 1}`,
+        [{ type: "text", text: part }],
+        topic.id,
+      ),
+    );
+  });
+
+  furtherFor(topic.id).forEach((paragraph, index) => {
+    spread(paragraph).forEach((part, partIndex) => {
+      pages.push(
+        page(
+          `${topic.id}-read-${index + 1}-${partIndex + 1}`,
+          clip(part),
+          [
+            {
+              type: "text",
+              text:
+                grade <= 5
+                  ? `Read this slowly. It belongs with ${topic.title}.`
+                  : `This is the next part of the reading for ${topic.title}.`,
+            },
+            { type: "text", text: part },
+          ],
+          topic.id,
+        ),
+      );
+    });
+  });
+
+  topic.keyPoints.forEach((point, index) => {
+    pages.push(page(`${topic.id}-point-${index + 1}`, clip(point), pointBlocks(topic, point, grade), topic.id));
+  });
+
+  if (topic.table) {
+    pages.push(
+      page(
+        `${topic.id}-table`,
+        topic.table.caption ? clip(topic.table.caption) : clip(topic.table.headers.join(", ")),
+        [
+          {
+            type: "text",
+            text:
+              grade <= 5
+                ? "Read across one row at a time and say what is different."
+                : "Compare the columns before you mix the words. A quantity in one column is not a substitute for the quantity in the other.",
+          },
+          { type: "table", ...topic.table },
+        ],
         topic.id,
       ),
     );
   }
-  if (topic.practice.length > 0 || topic.quiz.length > 0) {
-    const titleSource = topic.practice[0]?.question ?? topic.quiz[0]?.question ?? topic.check.question;
-    pages.push(page(`${topic.id}-questions`, clip(titleSource), questionBlocks(topic, grade), topic.id));
+
+  pages.push(page(`${topic.id}-careful`, clip(topic.mistake.wrong), cautionBlocks(topic, grade), topic.id));
+
+  formulas.forEach((formula, index) => {
+    pages.push(
+      page(
+        `${topic.id}-formula-${index + 1}`,
+        formula.name,
+        formulaBlocks({ ...topic, worked: undefined }, grade, [formula]),
+        topic.id,
+      ),
+    );
+  });
+
+  if (topic.worked && grade >= 6) {
+    const workedOnly = formulaBlocks({ ...topic, formulaIds: [] }, grade, []);
+    if (workedOnly.length > 0) {
+      pages.push(page(`${topic.id}-worked`, clip(topic.worked.prompt), workedOnly, topic.id));
+    }
   }
+
+  topic.practice.forEach((item, index) => {
+    pages.push(
+      page(
+        `${topic.id}-try-${index + 1}`,
+        clip(item.question),
+        questionBlocks({ ...topic, practice: [item], quiz: [] }, grade),
+        topic.id,
+      ),
+    );
+  });
+
+  topic.quiz.forEach((item, index) => {
+    pages.push(
+      page(
+        `${topic.id}-ask-${index + 1}`,
+        clip(item.question),
+        questionBlocks({ ...topic, practice: [], quiz: [item] }, grade),
+        topic.id,
+      ),
+    );
+  });
+
+  (topic.aliases ?? []).forEach((alias, index) => {
+    const point = topic.keyPoints[index % Math.max(topic.keyPoints.length, 1)] ?? topic.mistake.right;
+    pages.push(
+      page(
+        `${topic.id}-word-${index + 1}`,
+        alias,
+        [
+          {
+            type: "text",
+            text: `“${alias}” is one of the words for ${topic.title}. Use it when you talk about this part.`,
+          },
+          { type: "text", text: grade <= 5 ? topic.younger : topic.idea },
+          { type: "text", text: `When you hear “${alias}”, picture this case. ${topic.example}` },
+          { type: "text", text: point },
+        ],
+        topic.id,
+      ),
+    );
+  });
+
   return pages;
 }
 
 export function chapterPages(chapter: Chapter, grade: number): LessonPage[] {
-  const intro: TutorReply["blocks"] = [
-    { type: "text", text: chapter.promise },
-    { type: "text", text: chapter.scopeNote },
+  const pages: LessonPage[] = [
+    page(chapter.id, chapter.title, [
+      { type: "text", text: chapter.promise },
+      { type: "text", text: chapter.scopeNote },
+      {
+        type: "text",
+        text:
+          grade <= 5
+            ? `This chapter has ${chapter.topics.length} parts. Turn the page when you are ready for the next part.`
+            : `The chapter is in ${chapter.topics.length} parts. Each part has its own reading, so the number of pages follows the part, not a fixed length.`,
+      },
+    ]),
   ];
-  for (const topic of chapter.topics) {
-    intro.push({ type: "subheading", text: topic.title, depth: "part" });
-    intro.push({ type: "text", text: grade <= 5 ? topic.younger : topic.idea });
-    if (grade >= 11 && topic.senior) intro.push({ type: "text", text: topic.senior });
-    intro.push({ type: "text", text: topic.example });
-  }
-  const pages: LessonPage[] = [page(chapter.id, chapter.title, intro)];
+
+  chapter.topics.forEach((topic, index) => {
+    const ahead = chapter.topics[index + 1];
+    pages.push(
+      page(
+        `${chapter.id}-map-${topic.id}`,
+        topic.title,
+        [
+          { type: "text", text: grade <= 5 ? topic.younger : topic.idea },
+          ...(grade >= 11 && topic.senior ? [{ type: "text" as const, text: topic.senior }] : []),
+          { type: "text", text: topic.example },
+          {
+            type: "text",
+            text: ahead
+              ? `After ${topic.title}, the chapter goes on to ${ahead.title}.`
+              : `${topic.title} is the last part of ${chapter.title}.`,
+          },
+        ],
+        topic.id,
+      ),
+    );
+  });
+
   for (const topic of chapter.topics) pages.push(...topicPages(topic, grade));
+
+  for (const topic of chapter.topics) {
+    pages.push(
+      page(
+        `${chapter.id}-close-${topic.id}`,
+        `Remember ${topic.title}`,
+        [
+          {
+            type: "text",
+            text: `Close ${topic.title} by saying the facts without looking back.`,
+          },
+          ...topic.keyPoints.map((point) => ({ type: "text" as const, text: point })),
+          { type: "text", text: `${topic.check.question} ${topic.check.answer}` },
+          { type: "text", text: `The mistake to leave behind: ${topic.mistake.wrong} ${topic.mistake.right}` },
+        ],
+        topic.id,
+      ),
+    );
+  }
   return pages;
 }
 

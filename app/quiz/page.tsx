@@ -1,30 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { chaptersForGrade } from "@/content/curriculum";
-import type { QuizItem } from "@/content/types";
+import { PageGuide } from "@/components/PageGuide";
 import { useStudent } from "@/components/StudentProvider";
-
-function shuffle(items: QuizItem[]): QuizItem[] {
-  const copy = [...items];
-  for (let index = copy.length - 1; index > 0; index -= 1) {
-    const swap = Math.floor(Math.random() * (index + 1));
-    [copy[index], copy[swap]] = [copy[swap], copy[index]];
-  }
-  return copy.slice(0, 5);
-}
+import { buildQuiz } from "@/lib/quiz-set";
 
 export default function QuizPage() {
   const { grade, studentId, ready } = useStudent();
-  const [questions, setQuestions] = useState<QuizItem[]>([]);
+  const [questions, setQuestions] = useState<ReturnType<typeof buildQuiz>>([]);
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    const pool = chaptersForGrade(grade).flatMap((chapter) => chapter.topics.flatMap((topic) => topic.quiz));
-    setQuestions(shuffle(pool));
+    setQuestions(buildQuiz(grade));
     setIndex(0);
     setPicked(null);
     setScore(0);
@@ -55,8 +45,9 @@ export default function QuizPage() {
   if (!question && !done) return <p>Gathering questions…</p>;
 
   return (
-    <main className="panel">
-      <h1 className="page-title">Quiz</h1>
+    <main>
+      <PageGuide href="/quiz" />
+      <section className="panel">
       {done ? (
         <p>
           You scored {score} out of {questions.length}.
@@ -102,6 +93,7 @@ export default function QuizPage() {
           ) : null}
         </div>
       ) : null}
+      </section>
     </main>
   );
 }
