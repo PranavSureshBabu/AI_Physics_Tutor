@@ -39,6 +39,7 @@ export type QuizItem = {
   choices: string[];
   answerIndex: number;
   explanation: string;
+  chapterId?: string;
 };
 
 export type SketchName =

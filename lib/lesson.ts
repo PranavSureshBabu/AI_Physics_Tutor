@@ -17,8 +17,7 @@ export function replyToDoubt(topic: Topic, grade: number): TutorReply {
     blocks.push({ type: "text", text: topic.example });
   } else if (grade <= 5) {
     blocks.push({ type: "text", text: topic.younger });
-    blocks.push({ type: "text", text: topic.example });
-    blocks.push({ type: "text", text: topic.mistake.right });
+    blocks.push({ type: "text", text: `Try this. ${topic.example}` });
   } else if (grade <= 8) {
     blocks.push({ type: "text", text: topic.idea });
     blocks.push({ type: "text", text: topic.example });

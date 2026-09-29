@@ -23,6 +23,7 @@ export function practiceForGrade(grade: number): PracticeCard[] {
 }
 
 function extras(topic: Topic, grade: number): PracticeItem[] {
+  if (grade <= 5) return [];
   const voice = grade <= 5 ? topic.younger : topic.idea;
   const items: PracticeItem[] = [
     {

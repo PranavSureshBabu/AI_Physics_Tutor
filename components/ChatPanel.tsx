@@ -4,8 +4,15 @@ import { useState } from "react";
 import type { TutorReply } from "@/lib/blocks";
 import { TutorMessage } from "@/components/TutorMessage";
 import { useStudent } from "@/components/StudentProvider";
+import { rememberDoubt } from "@/lib/study";
 
 type ChatMessage = { role: "user" | "tutor"; text: string; reply?: TutorReply };
+
+type SpeechListener = {
+  lang: string;
+  start: () => void;
+  onresult: ((event: { results: Array<Array<{ transcript: string }>> }) => void) | null;
+};
 
 export function ChatPanel({
   mode,
@@ -24,6 +31,26 @@ export function ChatPanel({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const youngDoubt = grade <= 5 && mode === "doubt";
+
+  function listen() {
+    const host = window as Window & {
+      SpeechRecognition?: new () => SpeechListener;
+      webkitSpeechRecognition?: new () => SpeechListener;
+    };
+    const Ctor = host.SpeechRecognition ?? host.webkitSpeechRecognition;
+    if (!Ctor) {
+      setError("This browser cannot listen. Type the question instead.");
+      return;
+    }
+    const rec = new Ctor();
+    rec.lang = "en-IN";
+    rec.onresult = (event) => {
+      const said = event.results[0]?.[0]?.transcript ?? "";
+      if (said) setDraft(said);
+    };
+    rec.start();
+  }
 
   async function send(text: string) {
     const message = text.trim();
@@ -40,6 +67,7 @@ export function ChatPanel({
       });
       const data = (await response.json()) as { conversationId?: string; reply?: TutorReply; error?: string };
       if (!response.ok || !data.reply) throw new Error(data.error ?? "The tutor could not answer.");
+      if (mode === "doubt") rememberDoubt(studentId, { grade, text: message, at: new Date().toISOString() });
       setConversationId(data.conversationId);
       setMessages((current) => [...current, { role: "tutor", text: "", reply: data.reply }]);
     } catch (caught) {
@@ -50,9 +78,21 @@ export function ChatPanel({
   }
 
   return (
-    <section className="panel">
+    <section className={`panel chat-panel mode-${mode}`}>
+      <header className="chat-head">
+        <strong>{mode === "doubt" ? (grade <= 5 ? "Ask a doubt" : "Doubt Tutor") : grade <= 5 ? "Try a sum" : "Numerical Solver"}</strong>
+        <span>Class {grade}</span>
+      </header>
       <div className="chat-log">
-        {messages.length === 0 ? <p className="muted">Ask in your own words. The answer matches your class.</p> : null}
+        {messages.length === 0 ? (
+          <p className="muted">
+            {grade <= 5
+              ? mode === "doubt"
+                ? "Tap Speak, or pick a short question."
+                : "The hint is above."
+              : "Ask in your own words. The answer matches your class."}
+          </p>
+        ) : null}
         {messages.map((message, index) =>
           message.role === "user" ? (
             <p className="bubble user" key={index}>
@@ -84,6 +124,11 @@ export function ChatPanel({
           aria-label={placeholder}
           maxLength={2000}
         />
+        {youngDoubt ? (
+          <button className="ghost" type="button" onClick={listen}>
+            Speak
+          </button>
+        ) : null}
         <button className="primary" type="submit" disabled={busy || !ready}>
           {busy ? "Checking" : "Send"}
         </button>

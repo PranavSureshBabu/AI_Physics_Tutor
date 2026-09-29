@@ -58,7 +58,7 @@ function fromSolve(result: SolveResult, grade: number): Answer {
   if (result.status === "verified") {
     const lead =
       grade <= 5
-        ? "Here is the checked number, said as simply as I can."
+        ? "Here is the answer, in a few easy words."
         : parts.length > 1
           ? "Both parts are checked below. Each formula shows the given numbers in place."
           : "The steps put the given numbers into the formula.";

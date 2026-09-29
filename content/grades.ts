@@ -4,25 +4,25 @@ export const bands: BandInfo[] = [
   {
     id: "primary",
     name: "Primary",
-    blurb: "Everyday science that later becomes physics. Short lessons, no heavy symbols.",
+    blurb: "Everyday science that later becomes physics. Short lessons, no heavy symbols. These are original readings for this app, not a complete Class 1–5 textbook.",
     grades: [1, 2, 3, 4, 5],
   },
   {
     id: "middle",
-    name: "Middle",
-    blurb: "NCERT Science, in the physics chapters: motion, light, heat, electricity, magnets, and sound.",
+    name: "Middle School",
+    blurb: "Original readings on motion, light, heat, electricity, magnets, and sound for Classes 6–8. This is not a full board textbook.",
     grades: [6, 7, 8],
   },
   {
     id: "secondary",
     name: "Secondary",
-    blurb: "The Class 9 and 10 physics chapters, with the formulas those classes actually use.",
+    blurb: "Original Class 9 and 10 readings, with the formulas those classes usually meet. Not a complete board syllabus.",
     grades: [9, 10],
   },
   {
     id: "senior",
     name: "Senior Secondary",
-    blurb: "NCERT Physics for Classes 11 and 12, from measurement through semiconductors.",
+    blurb: "Original Class 11 and 12 readings from measurement through semiconductors. Not a complete board or entrance-exam syllabus.",
     grades: [11, 12],
   },
 ];

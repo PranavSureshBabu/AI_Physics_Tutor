@@ -14,13 +14,13 @@ export const TOOLS: Tool[] = [
   },
   {
     href: "/doubts",
-    label: "Doubts",
+    label: "Doubt Tutor",
     group: "Study",
-    note: "Ask in your own words. The answer is written for this class.",
+    note: "Ask in your own words. The answer stays in this class.",
   },
   {
     href: "/numericals",
-    label: "Numericals",
+    label: "Numerical Solver",
     group: "Practice",
     note: "Type a sum with its numbers. A result appears only when it can be checked.",
   },
@@ -44,13 +44,21 @@ export const TOOLS: Tool[] = [
   },
   {
     href: "/progress",
-    label: "Progress",
+    label: "My Progress",
     group: "Review",
     note: "Topics you opened, questions you asked, and your scores.",
   },
 ];
 
 export const NAV = [{ href: "/", label: "Home" }, ...TOOLS.map(({ href, label }) => ({ href, label }))];
+
+export function stepsFor(_grade: number): { href: string; label: string; note: string; step: number }[] {
+  const order = ["/learn", "/numericals", "/doubts", "/quiz", "/revision", "/progress", "/practice"];
+  return order.map((href, index) => {
+    const tool = TOOLS.find((item) => item.href === href)!;
+    return { href, label: tool.label, note: tool.note, step: index + 1 };
+  });
+}
 
 export function toolByHref(href: string) {
   return TOOLS.find((item) => item.href === href);

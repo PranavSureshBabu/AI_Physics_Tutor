@@ -9,8 +9,8 @@ const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito" });
 const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces" });
 
 export const metadata: Metadata = {
-  title: "Physics Tutor",
-  description: "A class-wise physics teacher for Classes 1 to 12, with checked calculations.",
+  title: "PHYSICA",
+  description: "An AI physics tutor for CBSE Classes 1 to 12. Each student sees only the class they chose.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

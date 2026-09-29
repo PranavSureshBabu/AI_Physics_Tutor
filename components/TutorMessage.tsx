@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react";
 import type { TutorReply } from "@/lib/blocks";
 import { FormulaView } from "@/components/FormulaView";
 import { MathLine, MathText } from "@/components/MathText";
@@ -11,15 +12,34 @@ const badgeClass = {
   external: "badge outside",
 };
 
-export function TutorMessage({ reply }: { reply: TutorReply }) {
+export function TutorMessage({
+  reply,
+  visual,
+  side = "left",
+}: {
+  reply: TutorReply;
+  visual?: ReactNode;
+  side?: "left" | "right";
+}) {
+  let placed = !visual;
   return (
     <article className="lesson">
       {reply.blocks.map((block, index) => {
+        const figure =
+          !placed && (block.type === "heading" || index === reply.blocks.length - 1) ? (
+            <div className={`text-fig side-${side}`} key="visual">
+              {visual}
+            </div>
+          ) : null;
+        if (figure) placed = true;
         if (block.type === "heading") {
           return (
-            <h2 className="page-title" id={block.id} key={index}>
-              {block.text}
-            </h2>
+            <Fragment key={index}>
+              <h2 className="page-title" id={block.id}>
+                {block.text}
+              </h2>
+              {figure}
+            </Fragment>
           );
         }
         if (block.type === "subheading") {

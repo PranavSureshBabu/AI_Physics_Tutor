@@ -3,6 +3,10 @@ import type { QuizItem, Topic } from "@/content/types";
 
 export const QUIZ_LENGTH = 50;
 
+export function quizLength(grade: number) {
+  return grade <= 5 ? 5 : QUIZ_LENGTH;
+}
+
 type Row = { chapterId: string; topic: Topic };
 
 export function questionsForGrade(grade: number): QuizItem[] {
@@ -22,8 +26,9 @@ export function questionsForGrade(grade: number): QuizItem[] {
   }
 
   for (const row of rows) {
-    for (const item of row.topic.quiz) add(item);
+    for (const item of row.topic.quiz) add({ ...item, chapterId: row.chapterId });
   }
+  if (grade <= 5) return items;
   for (const row of rows) {
     const shift = rows.findIndex((item) => item.topic.id === row.topic.id);
     add(mistakeQuestion(row, rows, shift));
@@ -37,7 +42,7 @@ export function questionsForGrade(grade: number): QuizItem[] {
 
 export function buildQuiz(grade: number): QuizItem[] {
   return shuffle(questionsForGrade(grade))
-    .slice(0, QUIZ_LENGTH)
+    .slice(0, quizLength(grade))
     .map(scramble);
 }
 

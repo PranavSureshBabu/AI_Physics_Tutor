@@ -26,6 +26,9 @@ export async function POST(request: Request) {
   const mode = body.mode === "numerical" || body.mode === "learn" ? body.mode : "doubt";
   const conversationId = validId(body.conversationId) ? body.conversationId : crypto.randomUUID();
   const existing = await readConversation(conversationId);
+  if (existing && existing.grade !== grade) {
+    return Response.json({ error: `This chat belongs to Class ${existing.grade}.` }, { status: 400 });
+  }
   const history = (existing?.turns ?? []).map((turn) => ({ role: turn.role, text: turn.text }));
   const previousSolve = [...(existing?.turns ?? [])].reverse().find((turn) => turn.solve)?.solve;
   let reply: Answer;
@@ -43,7 +46,10 @@ export async function POST(request: Request) {
       blocks: [
         {
           type: "text" as const,
-          text: `I could not finish that for Class ${grade}. Try the question in one or two sentences, with the numbers and units written out.`,
+          text:
+            grade <= 5
+              ? "I could not finish that. Ask it again in a few easy words."
+              : `I could not finish that for Class ${grade}. Try the question in one or two sentences, with the numbers and units written out.`,
         },
       ],
     };

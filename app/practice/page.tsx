@@ -1,72 +1,96 @@
 "use client";
 
 import { useState } from "react";
-import { chaptersForGrade } from "@/content/curriculum";
-import { PageGuide } from "@/components/PageGuide";
 import { practiceForGrade } from "@/lib/practice-set";
 import { useStudent } from "@/components/StudentProvider";
 
 export default function PracticePage() {
   const { grade, studentId, ready } = useStudent();
-  const chapters = chaptersForGrade(grade);
   const items = practiceForGrade(grade);
-  const [open, setOpen] = useState<string | null>(null);
+  const young = grade <= 5;
+  const [index, setIndex] = useState(0);
+  const [hintOpen, setHintOpen] = useState(false);
+  const [answerOpen, setAnswerOpen] = useState(false);
+  const item = items[index];
 
-  async function mark(label: string, correct: boolean) {
-    if (!ready) return;
+  function move(step: number) {
+    setIndex((value) => Math.min(items.length - 1, Math.max(0, value + step)));
+    setHintOpen(false);
+    setAnswerOpen(false);
+  }
+
+  async function mark(correct: boolean) {
+    if (!ready || !item) return;
     await fetch("/api/progress", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ studentId, event: { type: "practice", grade, label, correct } }),
+      body: JSON.stringify({ studentId, event: { type: "practice", grade, label: item.question, correct } }),
     });
   }
 
   return (
-    <main>
-      <PageGuide href="/practice" />
-      <p className="muted" style={{ marginTop: 0 }}>
-        {items.length} questions for this class. Work one, then open the hint.
-      </p>
-      {chapters.map((chapter) => {
-        const group = items.filter((item) => item.chapterId === chapter.id);
-        if (group.length === 0) return null;
-        return (
-          <section key={chapter.id} className="room-group">
-            <h2>
-              {chapter.title}
-              <span className="muted"> · {group.length}</span>
-            </h2>
-            <div className="split">
-              {group.map((item) => (
-                <article className="panel" key={item.id}>
-                  <p className="muted">{item.topic}</p>
-                  <strong>{item.question}</strong>
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button className="ghost" type="button" onClick={() => setOpen(open === item.id ? null : item.id)}>
-                      {open === item.id ? "Hide" : "Hint and answer"}
-                    </button>
-                  </div>
-                  {open === item.id ? (
-                    <div>
-                      <p>Hint: {item.hint}</p>
-                      <p>
-                        <strong>Answer: </strong>
-                        {item.answer}
-                      </p>
-                      <button className="primary" type="button" onClick={() => mark(item.question, true)}>
-                        I got it
-                      </button>
-                      <button className="ghost" type="button" onClick={() => mark(item.question, false)} style={{ marginLeft: 8 }}>
-                        Not yet
-                      </button>
-                    </div>
-                  ) : null}
-                </article>
-              ))}
+    <main className="page-practice">
+      <header className="page-banner">
+        <p>Class {grade}</p>
+        <h1>Practice</h1>
+        <p>
+          {young
+            ? "One question at a time. Hint opens a nudge. Show the answer opens the full line."
+            : "One question at a time. Use the arrows. Hint opens a nudge. Show the answer opens the full line."}
+        </p>
+      </header>
+      {item ? (
+        <section className="panel practice-card">
+          <p className="muted">
+            Question {index + 1} of {items.length}
+            {item.topic ? ` · ${item.topic}` : ""}
+          </p>
+          <h2>{item.question}</h2>
+          <div className="practice-actions">
+            <button className="ghost" type="button" onClick={() => setHintOpen((open) => !open)}>
+              {hintOpen ? "Hide hint" : "Show hint"}
+            </button>
+            <button className="ghost" type="button" onClick={() => setAnswerOpen((open) => !open)}>
+              {answerOpen ? "Hide answer" : "Show the answer"}
+            </button>
+          </div>
+          <p className="practice-note">Show hint gives a short nudge. Show the answer writes the full line under the question.</p>
+          {hintOpen ? (
+            <div className="reveal hint-box">
+              <strong>Hint</strong>
+              <p>{item.hint || "There is no extra hint for this question. Try it from the words above."}</p>
             </div>
-          </section>
-        );
-      })}
+          ) : null}
+          {answerOpen ? (
+            <div className="reveal answer-box">
+              <strong>Answer</strong>
+              <p>{item.answer || "This question has no stored answer line."}</p>
+              <div className="practice-actions">
+                <button className="primary" type="button" onClick={() => void mark(true)}>
+                  I got it
+                </button>
+                <button className="ghost" type="button" onClick={() => void mark(false)}>
+                  Not yet
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <div className="quiz-nav">
+            <button className="quiz-arrow" type="button" aria-label="Previous question" disabled={index === 0} onClick={() => move(-1)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14.5 5.5 8 12l6.5 6.5" />
+              </svg>
+            </button>
+            <button className="quiz-arrow" type="button" aria-label="Next question" disabled={index >= items.length - 1} onClick={() => move(1)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9.5 5.5 16 12l-6.5 6.5" />
+              </svg>
+            </button>
+          </div>
+        </section>
+      ) : (
+        <p>This class has no practice questions yet.</p>
+      )}
     </main>
   );
 }
